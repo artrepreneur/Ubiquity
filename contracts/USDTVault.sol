@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+// SPDX-License-License-Identifier: MIT
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -10,7 +10,7 @@ contract USDTVault is Ownable {
 
     event USDTWithdrawn(uint256 amount, address to);
 
-    constructor(IERC20 _usdt, address _usbXContract) Ownable(msg.sender) {
+    constructor(IERC20 _usdt, address _usbXContract, address initialOwner) Ownable(initialOwner) {
         usdt = IERC20(_usdt);
         usbXContract = _usbXContract;
     }

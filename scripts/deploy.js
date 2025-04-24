@@ -1,72 +1,117 @@
+// scripts/deploy.js
 const hre = require("hardhat");
 
 async function main() {
-  const [deployer] = await hre.ethers.getSigners();
+  const { ethers, network } = hre;
+  const [deployer] = await ethers.getSigners();
+
   console.log("Deploying contracts with:", deployer.address);
+  console.log(" network:", network.name);
 
-  // USDT address on Base (replace with actual Base USDT address)
-  const usdtAddress = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"; // Placeholder, verify!
+  const usdtAddress = network.name === "baseTestnet"
+    ? "0x805aa6E15ef225B03FcC32709D756e76cCC069C1"
+    : "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
-  // Deploy Treasury Vault first (receives 10B XBU)
-  const TreasuryVault = await hre.ethers.getContractFactory("TreasuryVault");
-  const treasuryVault = await TreasuryVault.deploy(deployer.address, usdtAddress);
-  await treasuryVault.waitForDeployment();
-  console.log("TreasuryVault deployed to:", treasuryVault.target);
-
-  // Deploy XBU Token (mints to Treasury Vault)
-  const XBU = await hre.ethers.getContractFactory("XBU");
-  const xbu = await XBU.deploy(treasuryVault.target);
+  // 1️⃣ Deploy XBU
+  console.log("\n1️⃣  Deploying XBU…");
+  const XBU = await ethers.getContractFactory("XBU");
+  const xbu = await XBU.deploy(deployer.address);
   await xbu.waitForDeployment();
-  console.log("XBU deployed to:", xbu.target);
+  console.log("   → XBU:", xbu.target);
 
-  // Deploy Farm Rewards Vault
-  const FarmRewardsVault = await hre.ethers.getContractFactory("FarmRewardsVault");
-  const farmRewardsVault = await FarmRewardsVault.deploy(xbu.target);
+  // 2️⃣ Deploy TreasuryVault
+  console.log("\n2️⃣  Deploying TreasuryVault…");
+  const TreasuryVault = await ethers.getContractFactory("TreasuryVault");
+  const treasuryVault = await TreasuryVault.deploy(
+    xbu.target,
+    usdtAddress,
+    deployer.address
+  );
+  await treasuryVault.waitForDeployment();
+  console.log("   → TreasuryVault:", treasuryVault.target);
+
+  // 3️⃣ Fund TreasuryVault
+  console.log("\n3️⃣  Funding TreasuryVault…");
+  const totalXBU = await xbu.totalSupply();
+  await (await xbu.transfer(treasuryVault.target, totalXBU)).wait();
+  console.log("   → Transferred", totalXBU.toString(), "XBU to vault");
+
+  // 4️⃣ Deploy FarmRewardsVault
+  console.log("\n4️⃣  Deploying FarmRewardsVault…");
+  const FarmRewardsVault = await ethers.getContractFactory("FarmRewardsVault");
+  const farmRewardsVault = await FarmRewardsVault.deploy(
+    xbu.target,
+    deployer.address
+  );
   await farmRewardsVault.waitForDeployment();
-  console.log("FarmRewardsVault deployed to:", farmRewardsVault.target);
+  console.log("   → FarmRewardsVault:", farmRewardsVault.target);
 
-  // Deploy USDT Vault
-  const USDTVault = await hre.ethers.getContractFactory("USDTVault");
-  const usdtVault = await USDTVault.deploy(usdtAddress, deployer.address); // Placeholder USBX
+  // 5️⃣ Deploy USDTVault (use ethers.ZeroAddress here!)
+  console.log("\n5️⃣  Deploying USDTVault…");
+  const USDTVault = await ethers.getContractFactory("USDTVault");
+  const usdtVault = await USDTVault.deploy(
+    usdtAddress,
+    ethers.ZeroAddress,      // ← FIXED: zero‐address constant in ethers v6
+    deployer.address
+  );
   await usdtVault.waitForDeployment();
-  console.log("USDTVault deployed to:", usdtVault.target);
+  console.log("   → USDTVault:", usdtVault.target);
 
-  // Deploy USBX Stablecoin
-  const USBX = await hre.ethers.getContractFactory("USBX");
-  const usbx = await USBX.deploy(usdtVault.target);
+  // 6️⃣ Deploy USBX
+  console.log("\n6️⃣  Deploying USBX…");
+  const USBX = await ethers.getContractFactory("USBX");
+  const usbx = await USBX.deploy(
+    usdtVault.target,
+    deployer.address
+  );
   await usbx.waitForDeployment();
-  console.log("USBX deployed to:", usbx.target);
+  console.log("   → USBX:", usbx.target);
 
-  // Update USDT Vault with USBX address
-  await usdtVault.transferOwnership(usbx.target); // Transfer control to USBX
+  // 7️⃣ Transfer USDTVault ownership to USBX
+  console.log("\n7️⃣  Transferring USDTVault → USBX…");
+  await (await usdtVault.transferOwnership(usbx.target)).wait();
+  console.log("   → USDTVault.owner =", await usdtVault.owner());
 
-  // Deploy Investor Vault
-  const InvestorVault = await hre.ethers.getContractFactory("InvestorVault");
-  const investorVault = await InvestorVault.deploy(xbu.target);
+  // 8️⃣ Deploy InvestorVault
+  console.log("\n8️⃣  Deploying InvestorVault…");
+  const InvestorVault = await ethers.getContractFactory("InvestorVault");
+  const investorVault = await InvestorVault.deploy(
+    xbu.target,
+    deployer.address
+  );
   await investorVault.waitForDeployment();
-  console.log("InvestorVault deployed to:", investorVault.target);
+  console.log("   → InvestorVault:", investorVault.target);
 
-  // Deploy Presale Contract (example sale period: 4 weeks from now)
-  const now = Math.floor(Date.now() / 1000);
-  const saleStart = now + 60; // 1 minute from now for testing
-  const saleEnd = saleStart + 4 * 7 * 24 * 60 * 60; // 4 weeks
-  const Presale = await hre.ethers.getContractFactory("Presale");
-  const presale = await Presale.deploy(usdtAddress, investorVault.target, treasuryVault.target, saleStart, saleEnd);
+  // 9️⃣ Deploy Presale
+  console.log("\n9️⃣  Deploying Presale…");
+  const now       = Math.floor(Date.now() / 1000);
+  const saleStart = now + 60;                             // +1 min
+  const saleEnd   = saleStart + 4 * 7 * 24 * 60 * 60;      // +4 weeks
+  const Presale   = await ethers.getContractFactory("Presale");
+  const presale   = await Presale.deploy(
+    usdtAddress,
+    investorVault.target,
+    treasuryVault.target,
+    saleStart,
+    saleEnd,
+    deployer.address
+  );
   await presale.waitForDeployment();
-  console.log("Presale deployed to:", presale.target);
+  console.log("   → Presale:", presale.target);
 
-  // Transfer 66.67M XBU to Presale (for Investor Vault allocation)
-  const xbuAmount = hre.ethers.parseUnits("66670000", 18);
-  await xbu.connect(deployer).approve(treasuryVault.target, xbuAmount);
-  await treasuryVault.withdrawXBU(xbuAmount, presale.target);
-
-  // Transfer 8B XBU to Farm Rewards Vault
-  const farmAmount = hre.ethers.parseUnits("8000000000", 18);
-  await xbu.connect(deployer).approve(treasuryVault.target, farmAmount);
-  await treasuryVault.withdrawXBU(farmAmount, farmRewardsVault.target);
+  console.log("\n✅ All done!\n");
+  console.log({
+    XBU: xbu.target,
+    TreasuryVault: treasuryVault.target,
+    FarmRewardsVault: farmRewardsVault.target,
+    USDTVault: usdtVault.target,
+    USBX: usbx.target,
+    InvestorVault: investorVault.target,
+    Presale: presale.target,
+  });
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch(err => {
+  console.error(err);
   process.exitCode = 1;
 });

@@ -41,3 +41,5 @@ Clone this repository and set up the project:
 git clone https://github.com/yourusername/ubiquity.git
 cd ubiquity
 npm install
+npx hardhat run scripts/directTransfer.js --network baseTestnet
+npx hardhat run scripts/deploy.js --network baseTestnet

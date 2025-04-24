@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -18,7 +18,7 @@ contract InvestorVault is Ownable {
     event TokensReleased(address beneficiary, uint256 amount);
     event VestingScheduleSet(address beneficiary, uint256 totalAllocation, uint256 startTime);
 
-    constructor(IERC20 _token) {
+    constructor(IERC20 _token, address initialOwner) Ownable(initialOwner) {
         token = _token;
     }
 

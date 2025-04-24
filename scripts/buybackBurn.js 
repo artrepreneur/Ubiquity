@@ -1,0 +1,22 @@
+// Script to automate buy back and burn
+const { ethers } = require('ethers');
+require('dotenv').config();
+
+// Config
+const BUYBACK_CONTRACT = "0xYourBuyBackAndBurnContract";
+const AMOUNT_USBX      = ethers.utils.parseUnits("1000", 18); // Daily buyback amount in USBX
+
+async function buybackAndBurn() {
+    const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
+    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+
+    const buybackAbi = ["function executeBuyBackAndBurn(uint256 amountUSDX) external"];
+    const buybackContract = new ethers.Contract(BUYBACK_CONTRACT, buybackAbi, wallet);
+
+    const tx = await buybackContract.executeBuyBackAndBurn(AMOUNT_USBX);
+    console.log("Buyback tx sent:", tx.hash);
+    await tx.wait();
+    console.log("Buyback tx confirmed:", tx.hash);
+}
+
+buybackAndBurn().catch(console.error);
